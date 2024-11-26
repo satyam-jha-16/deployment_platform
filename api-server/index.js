@@ -94,7 +94,7 @@ app.post("/project", async (req, res) => {
 
   return res.json({
     status: "queued",
-    data: { projectSlug, url: `http://${projectSlug}.localhost:8000` },
+    data: { projectSlug, url: `https://${projectSlug}.satyamjha.tech` },
   });
 });
 app.get("/", (req, res) => {
