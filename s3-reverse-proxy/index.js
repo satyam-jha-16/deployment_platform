@@ -71,7 +71,7 @@ const server = app.listen(PORT, () => {
 
 // Health check interval
 const healthCheck = () => {
-    const healthCheckUrl = `https:s3-reverse-proxy.onrender.com/health`;
+    const healthCheckUrl = `https://s3-reverse-proxy-bc0j.onrender.com/health`;
     
     http.get(healthCheckUrl, (resp) => {
         let data = "";
