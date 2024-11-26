@@ -22,4 +22,26 @@ proxy.on('proxyReq', (proxyReq, req, res) => {
         proxyReq.path += 'index.html'
 })
 
+app.get('/health', (req, res) => {
+  return res.json({ health: "ok" });
+})
+
 app.listen(PORT, () => console.log(`Reverse Proxy Running..${PORT}`))
+
+const https = require("https");
+setInterval(() => {
+  const healthCheckUrl = `https://localhost:${PORT}/health`;
+  http
+    .get(healthCheckUrl, (resp) => {
+      let data = "";
+      resp.on("data", (chunk) => {
+        data += chunk;
+      });
+      resp.on("end", () => {
+        console.log("Health check response:", data);
+      });
+    })
+    .on("error", (err) => {
+      console.error("Health check failed:", err.message);
+    });
+}, 14 * 60 * 1000); // 14 minutes in milliseconds

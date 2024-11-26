@@ -119,7 +119,7 @@ server.listen(PORT, () => {
 // Setup health check cron job (every 14 minutes)
 const https = require("https");
 setInterval(() => {
-  const healthCheckUrl = `http://localhost:${PORT}/health`;
+  const healthCheckUrl = `https://deployment-platform.onrender.com/health`;
   http
     .get(healthCheckUrl, (resp) => {
       let data = "";
