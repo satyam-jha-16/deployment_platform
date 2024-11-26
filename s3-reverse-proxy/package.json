@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "dev" : "node index.js"
+    "dev": "node index.js"
   },
   "keywords": [],
   "author": "",
@@ -15,6 +15,7 @@
     "http-proxy": "^1.18.1"
   },
   "devDependencies": {
+    "@types/express": "^5.0.0",
     "@types/http-proxy": "^1.17.15"
   }
 }
