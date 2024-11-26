@@ -1,77 +1,83 @@
 const express = require('express');
 const httpProxy = require('http-proxy');
 const dotenv = require('dotenv');
-const https = require('https');
 const http = require('http');
-const path = require('path');
 
 dotenv.config();
 
 const app = express();
-const PORT = 8000;
+const PORT = process.env.PORT || 8000;
 const BASE_PATH = process.env.BASE_PATH;
-const proxy = httpProxy.createProxy()
+const proxy = httpProxy.createProxy();
+
+// Explicitly parse hostname
+app.set('trust proxy', true);
+
+// Logging middleware for debugging
+app.use((req, res, next) => {
+    console.log(`Incoming request: ${req.method} ${req.url}`);
+    next();
+});
 
 app.use((req, res) => {
-    const hostname = req.hostname;
-    const subdomain = hostname.split('.')[0];
-    const resolvesTo = `${BASE_PATH}/${subdomain}`;
+    try {
+        const hostname = req.get('host') || req.hostname;
+        const subdomain = hostname.split('.')[0];
+        const resolvesTo = `${BASE_PATH}/${subdomain}`;
 
-    // Enhanced route handling
-    proxy.web(req, res, { 
-        target: resolvesTo, 
-        changeOrigin: true,
-        autoRewrite: true,
-        selfHandleResponse: true 
-    }, (err) => {
-        if (err) {
+        console.log(`Proxying to: ${resolvesTo}`);
+
+        proxy.web(req, res, { 
+            target: resolvesTo, 
+            changeOrigin: true,
+            autoRewrite: true,
+            selfHandleResponse: true 
+        }, (err) => {
             console.error('Proxy Error:', err);
-            
-            // Try to serve index.html for all routes
-            try {
-                res.sendFile(path.join(resolvesTo, 'index.html'));
-            } catch (sendFileErr) {
-                console.error('Failed to serve index.html:', sendFileErr);
-                res.status(500).json({ 
-                    error: 'Unable to route request', 
-                    details: err.message 
-                });
-            }
-        }
-    });
+            res.status(404).send('Service not found');
+        });
+    } catch (error) {
+        console.error('Request handling error:', error);
+        res.status(500).send('Internal Server Error');
+    }
 });
+
 proxy.on('proxyReq', (proxyReq, req, res) => {
     const url = req.url;
+    
     if (url === '/' || !url.includes('.')) {
         proxyReq.path = '/index.html';
     }
 });
 
-// Health check endpoint
 app.get('/health', (req, res) => {
     return res.json({ 
         health: "ok", 
-        timestamp: new Date().toISOString() 
+        timestamp: new Date().toISOString(),
+        port: PORT
     });
 });
 
-// Comprehensive error handling
-app.use((err, req, res, next) => {
-    console.error('Unhandled Error:', err);
-    res.status(500).json({
-        error: 'Internal Server Error',
-        message: err.message
-    });
-});
+// Create HTTP server with explicit binding
+const server = http.createServer(app);
 
-// Start server
-const server = app.listen(PORT, () => {
+// Listen with explicit error handling
+server.listen(PORT, '0.0.0.0', () => {
     console.log(`Reverse Proxy Running on port ${PORT}`);
+    console.log(`Listening on 0.0.0.0:${PORT}`);
 });
 
-// Health check interval
+// Error handling for server
+server.on('error', (error) => {
+    console.error('Server Error:', error);
+    if (error.code === 'EADDRINUSE') {
+        console.log(`Port ${PORT} is already in use`);
+    }
+});
+
+// Health check function
 const healthCheck = () => {
-    const healthCheckUrl = `https://s3-reverse-proxy-bc0j.onrender.com/health`;
+    const healthCheckUrl = `http://localhost:${PORT}/health`;
     
     http.get(healthCheckUrl, (resp) => {
         let data = "";
@@ -83,13 +89,6 @@ const healthCheck = () => {
         });
     }).on("error", (err) => {
         console.error("Health check failed:", err.message);
-        
-        // Optional: Restart server or take recovery action
-        if (err.code === 'ECONNREFUSED') {
-            console.log('Attempting to restart server...');
-            server.close();
-            server.listen(PORT);
-        }
     });
 };
 
@@ -104,4 +103,9 @@ process.on('SIGTERM', () => {
         console.log('Server closed');
         process.exit(0);
     });
+});
+
+// Catch any unhandled promise rejections
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
 });
