@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Project Deployment Monitor</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 20px auto;
+            padding: 20px;
+        }
+        .form-container {
+            margin-bottom: 20px;
+            padding: 20px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+        }
+        .input-group {
+            margin-bottom: 15px;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 8px;
+            margin-top: 5px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #messages {
+            margin-top: 20px;
+            padding: 10px;
+            border: 1px solid #eee;
+            border-radius: 4px;
+            min-height: 200px;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .message {
+            padding: 5px 0;
+            border-bottom: 1px solid #eee;
+        }
+        .error {
+            color: red;
+            margin-top: 5px;
+            font-size: 14px;
+        }
+        .success {
+            color: green;
+        }
+    </style>
+</head>
+<body>
+    <h1>Project Deployment Monitor</h1>
+    
+    <div class="form-container">
+        <form id="projectForm">
+            <div class="input-group">
+                <label for="githubUrl">GitHub Repository URL:</label>
+                <input type="text" id="githubUrl" required placeholder="https://github.com/username/repository">
+                <div id="urlError" class="error"></div>
+            </div>
+            
+            <div class="input-group">
+                <label for="projectName">Project Name:</label>
+                <input type="text" id="projectName" required placeholder="my-project">
+                <div id="nameError" class="error"></div>
+            </div>
+            
+            <button type="submit" id="submitBtn">Deploy Project</button>
+        </form>
+    </div>
+
+    <div id="status"></div>
+    <div id="messages"></div>
+
+    <script>
+        const socket = io('http://localhost:9002');
+        const form = document.getElementById('projectForm');
+        const status = document.getElementById('status');
+        const messagesDiv = document.getElementById('messages');
+        const submitBtn = document.getElementById('submitBtn');
+        
+        let currentChannel = null;
+
+        // Socket connection handlers
+        socket.on('connect', () => {
+            console.log('Connected to socket server');
+            status.innerHTML = '<p class="success">Socket server connected</p>';
+        });
+
+        socket.on('connect_error', (error) => {
+            console.error('Connection error:', error);
+            status.innerHTML = `<p class="error">Socket connection error: ${error.message}</p>`;
+        });
+
+        socket.on('message', (message) => {
+            console.log('Received message:', message);
+            const messageElement = document.createElement('div');
+            messageElement.className = 'message';
+            messageElement.innerHTML = `<p>${new Date().toLocaleTimeString()}: ${message}</p>`;
+            messagesDiv.appendChild(messageElement);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        });
+
+        // Form submission handler
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const githubUrl = document.getElementById('githubUrl').value.trim();
+            const projectName = document.getElementById('projectName').value.trim();
+            
+            // Basic validation
+            if (!githubUrl || !projectName) {
+                alert('Both GitHub URL and Project Name are required');
+                return;
+            }
+
+            submitBtn.disabled = true;
+            
+            try {
+                // Send project creation request
+                const response = await fetch('http://localhost:9000/project', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        gitURL: githubUrl,
+                        slug: projectName
+                    })
+                });
+
+                const data = await response.json();
+                
+                if (data.status === 'queued') {
+                    // Unsubscribe from previous channel if exists
+                    if (currentChannel) {
+                        socket.emit('unsubscribe', currentChannel);
+                    }
+
+                    // Subscribe to new channel
+                    currentChannel = `logs:${projectName}`;
+                    socket.emit('subscribe', currentChannel);
+                    
+                    status.innerHTML = `
+                        <p class="success">
+                            Project queued successfully!<br>
+                            Project URL: <a href="${data.data.url}" target="_blank">${data.data.url}</a><br>
+                            Listening for logs on channel: ${currentChannel}
+                        </p>
+                    `;
+                    
+                    // Clear previous messages
+                    messagesDiv.innerHTML = '';
+                } else {
+                    throw new Error('Project creation failed');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                status.innerHTML = `<p class="error">Error deploying project: ${error.message}</p>`;
+            } finally {
+                submitBtn.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>

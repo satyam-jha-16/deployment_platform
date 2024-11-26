@@ -1,0 +1,13 @@
+.env
+/api-server/node_modules
+/api-server/.env
+/api-server/package-lock.json
+/build-server/node_modules
+/build-server/.env
+/build-server/package-lock.json
+/s3-reverse-proxy/node_modules
+/s3-reverse-proxy/.env
+/s3-reverse-proxy/package-lock.json
+/frontend/.env.local
+/frontend/node_modules
+/report
